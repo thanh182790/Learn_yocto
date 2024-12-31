@@ -73,10 +73,10 @@ index 000000000000..9253ad314489
 +obj-$(CONFIG_NOKIA5110) += nokia5110.o
 diff --git a/drivers/nokia5110/nokia5110.c b/drivers/nokia5110/nokia5110.c
 new file mode 100644
-index 000000000000..90c72564d50b
+index 000000000000..bd8693ada1f3
 --- /dev/null
 +++ b/drivers/nokia5110/nokia5110.c
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,405 @@
 +#include <linux/init.h>
 +#include <linux/module.h>
 +#include <linux/kthread.h>
@@ -86,18 +86,43 @@ index 000000000000..90c72564d50b
 +#include <linux/uaccess.h>
 +#include <asm/uaccess.h>
 +#include <linux/spi/spi.h>
++#include <linux/cdev.h>
 +
 +#define LCD_WIDTH 		84
 +#define LCD_HEIGHT 		48
-+
 +#define LCD_CMD			0
 +#define LCD_DATA		1
++#define MAX_SLAVE 		2
++#define MAX_BUFF 		256
 +
-+struct spi_device *nokia5110_spi;
++static int nokia5110_open(struct inode *inodep,
++      					  struct file *filep);
++static int nokia5110_release(struct inode *inodep,
++ 							 struct file *filep);
++static int nokia5110_write(struct file *filep,
++						   const char *buf,
++		   				   size_t len, loff_t *offset);
++static ssize_t nokia5110_read(struct file *filp,
++							 char __user *buf,
++							 size_t len,
++							 loff_t *off);
++typedef struct 
++{
++	struct spi_device *nokia5110_spi;
++	dev_t nokia5110_dev_num;
++	struct class *nokia5110_class;
++	struct device *nokia5110_device_p;
++	struct cdev nokia5110_cdev;
++	char message[MAX_BUFF];
++} nokia5110_t;
 +
-+static int re_pin = 25;
-+static int dc_pin = 24;
-+//static int ce_pin = 26;
++static struct file_operations fops = {
++	.owner      = THIS_MODULE,
++	.open = nokia5110_open,
++	.release = nokia5110_release,
++	.write = nokia5110_write,
++	.read = nokia5110_read
++};
 +
 +static const unsigned short ASCII[][5] =
 +{
@@ -199,6 +224,11 @@ index 000000000000..90c72564d50b
 +	{0x00, 0x06, 0x09, 0x09, 0x06} // 7f .
 +};
 +
++dev_t tmp_dev_num;
++nokia5110_t lcd = {};
++static int rst_pin = 25;
++static int dc_pin = 24;
++
 +void nokia5110_init(void);
 +void nokia5110_clear_screen(void);
 +void nokia5110_send_byte(bool, unsigned char);
@@ -208,10 +238,9 @@ index 000000000000..90c72564d50b
 +void nokia5110_init()
 +{
 +	// set GPIOs
-+//	gpio_set_value(ce_pin, 0);
-+	gpio_set_value(re_pin, 0);
++	gpio_set_value(rst_pin, 0);
 +	udelay(2);
-+	gpio_set_value(re_pin, 1);
++	gpio_set_value(rst_pin, 1);
 +
 +	// init LCD
 +	nokia5110_send_byte(LCD_CMD, 0x21);	// LCD Extended Commands
@@ -232,7 +261,7 @@ index 000000000000..90c72564d50b
 +	else
 +		gpio_set_value(dc_pin, 0);
 +
-+	spi_write(nokia5110_spi, &data, sizeof(data));
++	spi_write(lcd.nokia5110_spi, &data, sizeof(data));
 +}
 +
 +void nokia5110_clear_screen()
@@ -258,26 +287,123 @@ index 000000000000..90c72564d50b
 +
 +void nokia5110_write_string(char *data)
 +{
-+	while(*data)
++	/* User space send data always has character LF end of string. So we won't print it to LCD */
++	while(*data && *data != 0xA) {
 +		nokia5110_write_char(*data++);
++	}
++}
++
++/*
++ * Turn on LCD
++ */
++static int nokia5110_open(struct inode *inodep, struct file *filep)
++{
++	pr_info("Go to %s, %d\n", __func__, __LINE__);
++	return 0;
++}
++
++/*
++ * Turn off LCD
++ */
++static int nokia5110_release(struct inode *inodep, struct file *filep)
++{
++	pr_info("Go to %s, %d\n", __func__, __LINE__);
++
++	filep->private_data = NULL;
++	return 0;
++}
++
++/*
++ * Display Text to LCD
++ */
++static int nokia5110_write(struct file *filep, const char *buf,
++			size_t len, loff_t *offset)
++{
++	int ret;
++	pr_info("Go to %s, %d\n", __func__, __LINE__);
++
++	memset(lcd.message, 0x0, sizeof(lcd.message));
++    if (len > sizeof(lcd.message) - 1) {
++        pr_info("Input data too large, truncating...\n");
++        len = sizeof(lcd.message) - 1;
++    }
++
++    ret = copy_from_user(lcd.message, buf, len);
++	if (ret) {
++		pr_err("can not copy from user\n");
++		return -ENOMSG;
++	}
++	pr_info("\nUser send: \"%s\"\n", lcd.message);
++	nokia5110_clear_screen();
++	nokia5110_write_string(lcd.message);
++
++	return len;
++}
++
++/*
++ * Read Text from LCD
++ */
++static ssize_t nokia5110_read(struct file *filp, char __user *buf, size_t len, loff_t *off)
++{
++    ssize_t bytes_to_read = min(len, (size_t)(MAX_BUFF - *off));
++
++    if (bytes_to_read <= 0) {
++        pr_info("Data Read: End of file\n");
++        return 0; // End of file
++    }
++
++    if (copy_to_user(buf, lcd.message + *off, bytes_to_read)) {
++        pr_err("Data Read: Err!\n");
++        return -EFAULT; 
++    }
++
++    *off += bytes_to_read;
++    pr_info("Data Read: Done!\n");
++    return bytes_to_read;
 +}
 +
 +static int nokia5110_probe(struct spi_device *spi)
 +{
-+    pr_info("Insert SPI probe\n");
-+	gpio_request(re_pin, "RE");
++	int res = 0;
++	int major = MAJOR(tmp_dev_num);
++	int minor = spi->chip_select;
++
++/***************** Create Device File In User Space***************/
++	lcd.nokia5110_dev_num = MKDEV(major, minor);
++	lcd.nokia5110_device_p = device_create(lcd.nokia5110_class, &spi->dev, lcd.nokia5110_dev_num,
++					&lcd, "nokia5110_%d", minor); /* /dev/nokia5110_0 */
++	if (lcd.nokia5110_device_p == NULL) {
++		pr_info("Can not create device\n");
++		return -1;
++	}
++
++	/* Register operations of device */
++	cdev_init(&lcd.nokia5110_cdev, &fops);
++	lcd.nokia5110_cdev.owner = THIS_MODULE;
++	lcd.nokia5110_cdev.dev = lcd.nokia5110_dev_num;
++
++	res = cdev_add(&lcd.nokia5110_cdev, lcd.nokia5110_dev_num, 1);
++	if (res) {
++		pr_err("error occur when add properties for struct cdev\n");
++		goto cdev_add_fail;
++	}
++
++    pr_info("Go to %s\n", __func__);
++	gpio_request(rst_pin, "RE");
 +	gpio_request(dc_pin, "DC");
-+	//gpio_request(ce_pin, "CE");
-+	gpio_direction_output(re_pin, 0);
++	gpio_direction_output(rst_pin, 0);
 +	gpio_direction_output(dc_pin, 0);
-+	//gpio_direction_output(ce_pin, 0);
-+	
-+	nokia5110_spi = spi;
++
++	lcd.nokia5110_spi = spi;
 +	nokia5110_init();
 +	nokia5110_clear_screen();
-+	nokia5110_write_string("Hello, World!!!");
 +
-+    return 0;
++	pr_info("Nokia5110 Init successfully\n");
++	return 0;
++
++cdev_add_fail:
++	device_destroy(lcd.nokia5110_class, lcd.nokia5110_dev_num);
++	return -1;
 +}
 +
 +static int nokia5110_remove(struct spi_device *spi)
@@ -306,20 +432,55 @@ index 000000000000..90c72564d50b
 +
 +static int __init func_init(void)
 +{
-+    pr_info("Insert SPI %s\n", __func__);
-+	return spi_register_driver(&my_spi_driver);
++	int res = 0;
++
++    pr_info("Go to SPI %s\n", __func__);
++	/* Register range device numbers for number of LCD devices */
++	res = alloc_chrdev_region(&tmp_dev_num, 0, MAX_SLAVE, "nokia5110_device");
++	if (res < 0) {
++		pr_info("Error occur, can not register major number\n");
++		goto alloc_dev_failed;
++	}
++
++	/* Create the class for all of LCD Devices */
++	lcd.nokia5110_class = class_create(THIS_MODULE, "nokia5110_class");
++	if (lcd.nokia5110_class == NULL) {
++		pr_info("Error occur, can not create class device\n");
++		goto create_class_failed;
++	}
++
++	/* Register spi_driver - protocol driver */
++	res = spi_register_driver(&my_spi_driver);
++	if (res < 0) {
++		goto spi_register_failed;
++	}
++
++	pr_info("Go out SPI %s\n", __func__);
++	return res;
++
++spi_register_failed:
++	class_destroy(lcd.nokia5110_class);
++create_class_failed:
++	unregister_chrdev_region(tmp_dev_num, MAX_SLAVE);
++alloc_dev_failed:
++	return res;	
 +}
 +
 +static void __exit func_exit(void)
 +{
-+    pr_info("Remove SPI %s\n", __func__);
++    pr_info("Remove function SPI d%s\n", __func__);
++    cdev_del(&lcd.nokia5110_cdev);
++	device_destroy(lcd.nokia5110_class, lcd.nokia5110_dev_num);                                        
++    class_destroy(lcd.nokia5110_class);                      
++    unregister_chrdev_region(tmp_dev_num, MAX_SLAVE);     
++         
 +	return spi_unregister_driver(&my_spi_driver);
 +}
 +
 +module_init(func_init);
 +module_exit(func_exit);
 +
-+MODULE_AUTHOR("Devlinu");
++MODULE_AUTHOR("Devlinux");
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/nokia5110/nokia5110_bk.c b/drivers/nokia5110/nokia5110_bk.c
 new file mode 100644

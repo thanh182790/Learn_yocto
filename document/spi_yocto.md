@@ -4,10 +4,14 @@ SPI là một giao thức giao tiếp phổ biến được sử dụng bởi nh
 Lợi ích duy nhất của SPI là dữ liệu có thể được truyền mà không bị gián đoạn. Bất kỳ số lượng bit nào cũng có thể được gửi hoặc nhận trong một luồng liên tục. Với I2C và UART, dữ liệu được gửi dưới dạng gói, giới hạn ở một số bit cụ thể. Điều kiện bắt đầu và dừng xác định điểm bắt đầu và kết thúc của mỗi gói, do đó dữ liệu bị gián đoạn trong quá trình truyền.
 
 Các thiết bị giao tiếp qua SPI có quan hệ Master - Slave. Master là thiết bị điều khiển (thường là vi điều khiển), còn Slave (thường là cảm biến, màn hình hoặc chip nhớ) nhận lệnh từ Master. Cấu hình đơn giản nhất của SPI là hệ thống một Slave, một master duy nhất, nhưng một Master có thể điều khiển nhiều hơn một Slave.
+
 ![SPI Protocol](./picture/spi_yocto/spi_protocol.jpg)
+
 Chi tiết cách thức hoạt động của SPI có thể tham khảo [tại đây](https://dientutuonglai.com/chuan-giao-tiep-spi-la-gi.html)
 # 2. SPI protocol driver trong linux
-/*** Paste cai anh spi driver vao day */
+
+![SPI Protocol Driver Linux](./picture/spi_yocto/spi_protocol_driver_linux.jpg)
+
 Protocol driver là tầng làm việc trực tiếp với các thiết bị ngoại vi ( sd card, flash, lcd,..). Dựa theo datasheet của các thiệt bị ngoại vị mà protocol driver sẽ gửi các lệnh để giao tiếp với chúng.
 
 Dưới cùng là tầng hardware, SPI controler driver sẽ có nhiệm vụ giao tiêp với hardware. Driver này thường sẽ do đội làm chíp cung cấp. Kernel sẽ cung cấp cho chúng ta một thư viện spi.h để các protocol driver có thể sử dụng và gọi xuống các hàm của SPI controler driver. Từ các protocol driver này sẽ cung cấp các device file cho user space sử dụng. Người dùng sẽ tương tác với các file này trên user space để điều khiển thiết bị.
@@ -17,7 +21,8 @@ SPI protocol driver được linux quản lý thông qua 2 struct
 	- struct spi_device
 Các bạn có thể đọc thêm về các struct này trong [link](https://elixir.bootlin.com/linux/v5.4.72/source) 
 # 3. Tổng quan Nokia5110
-/*ảnh nokia5110*/
+
+![nokia51110](./picture/spi_yocto/nokia5110.jpg)
 
 Màn hình LCD Nokia 5110 là loại LCD Graphic đơn sắc với số điểm ảnh 84x84 Pixel,với ưu điểm giá thành rẻ, nhỏ gọn, tích hợp đèn nền, sử dụng giao tiếp SPI dễ dàng lập trình và khả năng tiết kiệm năng lượng cao, LCD.
 Thông số kỹ thuật:
@@ -636,5 +641,9 @@ Xem hướng dẫn [tại đây](https://github.com/thanh182790/Learn_yocto/blob
 Sau khi build xong, copy flash image nằm vào thẻ nhớ. Sau đó, copy file binary của app sang board để chạy thử
 
 # 5. Kết quả
-Sau khi khởi động thiết bị xong check log thấy hàm probe đã được gọi
+Sau khi flash xong insmod module và test thử app 
+
+![Log App nokia5110](./picture/spi_yocto/log_app_nokia.png)
+
+![Anh man hinh nokia5110](./picture/spi_yocto/XinchaoDevlinux.jpg)
 

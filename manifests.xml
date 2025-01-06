@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <!-- Yocto -->
+  <remote name="yocto"
+          fetch="git://git.yoctoproject.org"/>
+  <project name="poky"
+           remote="yocto"
+           revision="refs/tags/yocto-3.1.33"
+           upstream="dunfell"
+           path="sources/poky"/>
+
+  <!-- OpenEmbedded -->
+  <remote name="oe"
+          fetch="git://git.openembedded.org"/>
+  <remote name="oe-mirror"
+          fetch="https://github.com/openembedded"/>
+  <project name="meta-openembedded"
+           remote="oe"
+           revision="2b5dd1eb81cd08bc065bc76125f2856e9383e98b"
+           path="sources/meta-openembedded"/>
+
+  <!-- Raspberry Pi -->
+  <project name="meta-raspberrypi"
+           remote="yocto"
+           revision="2081e1bb9a44025db7297bfd5d024977d42191ed"
+           upstream="dunfell"
+           path="sources/meta-raspberrypi"/>
+
+</manifest>
+

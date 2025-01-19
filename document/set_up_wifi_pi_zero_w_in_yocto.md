@@ -36,7 +36,7 @@ drwxr-xr-x 3 tnguyenv tnguyenv 4096 Dec 26 22:26 recipes-example
 ```
 ## 3.1. Tạo recipe wpa-supplicant
 Tạo 1 thư mục *wpa-supplicant* để chứa file cấu hình và file công thức như dưới
-``bash
+```bash
 ~/yocto/sources/meta-custom/recipes-connectivity/wpa-supplicant$ tree
 .
 ├── files
@@ -45,7 +45,7 @@ Tạo 1 thư mục *wpa-supplicant* để chứa file cấu hình và file công
 
 1 directory, 2 files
 ```
-``bash
+```bash
 ~/yocto/sources/meta-custom/recipes-connectivity/wpa-supplicant$ cat files/wpa_supplicant.conf
 ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=0
